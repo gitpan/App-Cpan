@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.56_01';
+$VERSION = '1.56_04';
 
 =head1 NAME
 
@@ -170,12 +170,19 @@ use File::Basename;
 use Getopt::Std;
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# Internal constants
+use constant TRUE  => 1;
+use constant FALSE => 0;
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # The return values
 use constant HEY_IT_WORKED              =>   0; 
 use constant I_DONT_KNOW_WHAT_HAPPENED  =>   1; # 0b0000_0001
 use constant ITS_NOT_MY_FAULT           =>   2;
 use constant THE_PROGRAMMERS_AN_IDIOT   =>   4;
 use constant A_MODULE_FAILED_TO_INSTALL =>   8;
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # set up the order of options that we layer over CPAN::Shell
@@ -393,8 +400,8 @@ sub _default
 	# 1. with no switches, but arguments, use the default switch (install)
 	# 2. with no switches and no args, start the shell
 	# 3. With a switch but no args, die! These switches need arguments.
-	   if( not $switch and     @$args ) { $switch = $Default;     }
-	elsif( not $switch and not @$args ) { CPAN::shell(); return   }
+	   if( not $switch and     @$args ) { $switch = $Default;  }
+	elsif( not $switch and not @$args ) { return CPAN::shell() }
 	elsif(     $switch and not @$args )
 		{ die "Nothing to $CPAN_METHODS{$switch}!\n"; }
 
@@ -403,7 +410,10 @@ sub _default
 	die "CPAN.pm cannot $method!\n" unless CPAN::Shell->can( $method );
 
 	# call the CPAN::Shell method, with force if specified
-	my $use_the_force =  $options->{f};
+	my $action = do {
+		if( $options->{f} ) { sub { CPAN::Shell->force( $method, @_ ) } }
+		else                { sub { CPAN::Shell->$method( @_ )        } }
+		};
 	
 	# How do I handle exit codes for multiple arguments?
 	my $errors = 0;
@@ -411,11 +421,9 @@ sub _default
 	foreach my $arg ( @$args ) 
 		{		
 		_clear_cpanpm_output();
-		CPAN::Shell->$method( $arg );
-		my $output = _get_cpanpm_output();
+		$action->( $arg );
 
-		my @lines = split /\n/, $output;
-		$errors = grep { /NOT OK/ } @lines;
+		$errors += defined _cpanpm_output_indicates_failure();
 		}
 
 	$errors ? I_DONT_KNOW_WHAT_HAPPENED : HEY_IT_WORKED;
@@ -432,32 +440,68 @@ so I can find out what happened.
 =cut
 
 {
-my( $fh, $scalar ) = ( undef, '' );
+my $scalar = '';
 
 sub _hook_into_CPANpm_report
 	{
-	if( defined $fh ) { return ( $fh, $scalar ) }
-	
-	require CPAN;
-	
-	$CPAN::Be_Silent = 1;
-	
-	open $fh, ">", \ $scalar;
-	
 	no warnings 'redefine';
 	
-	*CPAN::Shell::report_fh = sub { $fh };
-	
-	$logger->debug( "CPAN.pm output: $scalar" );
-	
-	return ( $fh, $scalar ); 
+	*CPAN::Shell::myprint = sub {
+    	my($self,$what) = @_;
+		$scalar .= $what;
+    	$self->print_ornamented($what,
+			$CPAN::Config->{colorize_print}||'bold blue on_white',
+			);
+		};
+
+	*CPAN::Shell::mywarn = sub {
+		my($self,$what) = @_;
+		$scalar .= $what;
+		$self->print_ornamented($what, 
+			$CPAN::Config->{colorize_warn}||'bold red on_white'
+			);
+		};
+
 	}
 	
 sub _clear_cpanpm_output { $scalar = '' }
 	
 sub _get_cpanpm_output   { $scalar }
+
+sub _get_cpanpm_last_line
+	{
+	open my($fh), "<", \ $scalar;
+	( <$fh> )[-1];
+	}
+
+sub _cpanpm_output_indicates_failure
+	{
+	my $last_line = _get_cpanpm_last_line();
+	
+	my $result = $last_line =~ /\b(?:Error|stop|problems?|force|not|unsupported|fail)\b/i;
+	$result || ();
+	}
+	
+sub _cpanpm_output_indicates_success
+	{
+	my $last_line = _get_cpanpm_last_line();
+	
+	my $result = $last_line =~ /\b(?:\s+-- OK|PASS)\b/;
+	$result || ();
+	}
+	
+sub _cpanpm_output_is_vague
+	{
+	return FALSE if 
+		_cpanpm_output_indicates_failure() || 
+		_cpanpm_output_indicates_success();
+
+	return TRUE;
+	}
+
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 sub _print_help
 	{
 	$logger->info( "Use perldoc to read the documentation" );
@@ -557,7 +601,7 @@ sub _get_file
 	{
 	my $path = shift;
 	
-	my $loaded = eval { require LWP::Simple; 1; };
+	my $loaded = eval "require LWP::Simple; 1;";
 	croak "You need LWP::Simple to use features that fetch files from CPAN\n"
 		unless $loaded;
 	
@@ -579,7 +623,7 @@ sub _gitify
 	{
 	my $args = shift;
 	
-	my $loaded = eval { require Archive::Extract; 1; };
+	my $loaded = eval "require Archive::Extract; 1;";
 	croak "You need Archive::Extract to use features that gitify distributions\n"
 		unless $loaded;
 	
@@ -643,7 +687,7 @@ sub _show_Changes
 sub _get_changes_file
 	{
 	croak "Reading Changes files requires LWP::Simple and URI\n"
-		unless eval { require LWP::Simple; require URI; 1 };
+		unless eval "require LWP::Simple; require URI; 1";
 	
     my $url = shift;
 

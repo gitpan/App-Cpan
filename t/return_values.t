@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 
+$|++;
+
 use Test::More tests => 10;
 
 use File::Spec::Functions qw(catfile devnull);
@@ -10,7 +12,7 @@ my $command     = catfile qw( blib script cpan );
 my $config_file = catfile qw( t lib CPAN Config.pm );
 
 # Ensure the script is there and ready to run
-ok( -x $command, "$command is executable" ) || 
+ok( -e $command, "$command is there" ) || 
 	BAIL_OUT( "Can't continue without script" );
 ok( ! system( $^X, '-Mblib', '-c', $command ), "$command compiles" ) ||
 		BAIL_OUT( "Can't continue if script won't compile" );
@@ -36,7 +38,7 @@ diag( <<"HERE" );
 =================================================================
 You're going to see a mess of output. This is normal and it comes
 from the external process I am testing. I'm intentionally trying
-to install modules that will fail.
+to install modules that will fail. I'll tell you when I'm done.
 =================================================================
 
 
@@ -49,10 +51,21 @@ foreach my $trial ( @trials )
 	my $rc = do {
 		local *STDERR;
 		open STDERR, ">", devnull();
-		system $^X, $command, @config, @$options;
+		system $^X, '-Mblib', $command, @config, @$options;
 		};
 		
 	my $exit_value = $rc >> 8;
 	
 	is( $exit_value, $expected_exit_value, "$command @config @$options" );
 	}
+
+diag( <<"HERE" );
+
+
+
+=================================================================
+I'm done. Any further messes you see are real errors.
+=================================================================
+
+
+HERE

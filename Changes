@@ -1,5 +1,10 @@
 $Id$
 
+1.57 - Thu Dec  3 10:10:33 2009
+	* Promote all the recent fixes to a stable release.
+	* This release should be the one in Perl 5.12 with the next
+	iteration of CPAN.pm
+
 1.56_15 - Thu Nov 12 17:39:18 2009
 	* Fixed the -l switch to list any installed module once
 	per path (total newbie bug there)

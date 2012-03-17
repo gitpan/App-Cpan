@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               App-Cpan
-version:            1.58
+version:            1.58_01
 abstract:           Interact with CPAN from the command line
 author:
     - brian d foy <bdfoy@cpan.org>

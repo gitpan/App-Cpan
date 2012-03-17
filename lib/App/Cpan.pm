@@ -1,9 +1,12 @@
 package App::Cpan;
+
+use v5.10.1;
+
 use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.58';
+$VERSION = '1.58_01';
 
 =head1 NAME
 
@@ -889,7 +892,7 @@ sub _load_local_lib # -I
 
 	my $rc = eval { require local::lib; 1; };
 	unless( $rc ) {
-		$logger->warn( "Could not load local::lib" );
+		$logger->die( "Could not load local::lib" );
 		}
 
 	local::lib->import;

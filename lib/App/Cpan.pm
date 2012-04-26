@@ -1,12 +1,11 @@
 package App::Cpan;
 
-use v5.10.1;
-
+use 5.006;
 use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.58_01';
+$VERSION = '1.59';
 
 =head1 NAME
 
@@ -357,8 +356,9 @@ sub _process_setup_options
 	else
 		{
 		# this is what CPAN.pm would do otherwise
+		local $CPAN::Be_Silent = 1;
 		CPAN::HandleConfig->load(
-			be_silent  => 1,
+			# be_silent  => 1, deprecated
 			write_file => 0,
 			);
 		}

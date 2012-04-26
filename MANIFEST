@@ -25,4 +25,5 @@ test-mirror/authors/id/B/BU/BUSTER/Local-Works-Fine.tgz
 test-mirror/authors/id/B/BU/BUSTER/Make.pl
 test-mirror/modules/02packages.details.txt
 test-mirror/modules/03modlist.data.gz
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)

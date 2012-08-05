@@ -6,6 +6,7 @@ MANIFEST
 script/cpan
 t/compile.t
 t/cpanpm_output_hook.t
+t/expand_filenames.t
 t/install_hack.t
 t/lib/CPAN.pm
 t/lib/CPAN/Config.pm
@@ -25,5 +26,4 @@ test-mirror/authors/id/B/BU/BUSTER/Local-Works-Fine.tgz
 test-mirror/authors/id/B/BU/BUSTER/Make.pl
 test-mirror/modules/02packages.details.txt
 test-mirror/modules/03modlist.data.gz
-META.yml                                 Module YAML meta-data (added by MakeMaker)
-META.json                                Module JSON meta-data (added by MakeMaker)
+META.yml                                 Module meta-data (added by MakeMaker)

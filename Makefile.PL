@@ -1,4 +1,6 @@
-use ExtUtils::MakeMaker;
+use ExtUtils::MakeMaker 6.48;
+
+require 5.008;
 
 eval "use Test::Manifest 1.21";
 
@@ -18,7 +20,7 @@ WriteMakefile(
 		},
 		
 	'PREREQ_PM' => {
-		'Test::More' => '0',
+		'Test::More' => '0.95',
 		'CPAN'       => '1.9301',
 		},
 

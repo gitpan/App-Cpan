@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.61';
+$VERSION = '1.61_02';
 
 =head1 NAME
 
@@ -21,6 +21,9 @@ App::Cpan - easily interact with CPAN from the command line
 
 	# use local::lib
 	cpan -I module_name [ module_name ... ]
+
+	# one time mirror override for faster mirrors
+	cpan -p ...
 
 	# with just the dot, install from the distribution in the
 	# current directory
@@ -134,6 +137,11 @@ List the modules by the specified authors.
 
 Make the specified modules.
 
+=item -M mirror1,mirror2,...
+
+A comma-separated list of mirrors to use for just this run. The C<-P>
+option can find them for you automatically.
+
 =item -n
 
 Do a dry run, but don't actually install anything. (unimplemented)
@@ -144,11 +152,12 @@ Show the out-of-date modules.
 
 =item -p
 
-Ping the configured mirrors
+Ping the configured mirrors and print a report
 
 =item -P
 
-Find the best mirrors you could be using (but doesn't configure them just yet)
+Find the best mirrors you could be using and use them for the current
+session.
 
 =item -r
 
@@ -244,7 +253,7 @@ BEGIN { # most of this should be in methods
 use vars qw( @META_OPTIONS $Default %CPAN_METHODS @CPAN_OPTIONS  @option_order
 	%Method_table %Method_table_index );
 
-@META_OPTIONS = qw( h v V I g G C A D O l L a r p P j: J w T);
+@META_OPTIONS = qw( h v V I g G M: C A D O l L a r p P j: J w T);
 
 $Default = 'default';
 
@@ -282,6 +291,8 @@ sub GOOD_EXIT () { 0 }
 	J =>  [ \&_dump_config,       NO_ARGS, GOOD_EXIT, 'Dump configuration to stdout' ],
 	F =>  [ \&_lock_lobotomy,     NO_ARGS, GOOD_EXIT, 'Turn off CPAN.pm lock files'  ],
 	I =>  [ \&_load_local_lib,    NO_ARGS, GOOD_EXIT, 'Loading local::lib'           ],
+	M =>  [ \&_use_these_mirrors,    ARGS, GOOD_EXIT, 'Setting per session mirrors'  ],
+	P =>  [ \&_find_good_mirrors, NO_ARGS, GOOD_EXIT, 'Finding good mirrors'         ],
     w =>  [ \&_turn_on_warnings,  NO_ARGS, GOOD_EXIT, 'Turning on warnings'          ],
     T =>  [ \&_turn_off_testing,  NO_ARGS, GOOD_EXIT, 'Turning off testing'          ],
 
@@ -298,7 +309,6 @@ sub GOOD_EXIT () { 0 }
 	L =>  [ \&_show_author_mods,     ARGS, GOOD_EXIT, 'Showing author mods'          ],
 	a =>  [ \&_create_autobundle, NO_ARGS, GOOD_EXIT, 'Creating autobundle'          ],
 	p =>  [ \&_ping_mirrors,      NO_ARGS, GOOD_EXIT, 'Pinging mirrors'              ],
-	P =>  [ \&_find_good_mirrors, NO_ARGS, GOOD_EXIT, 'Finding good mirrors'         ],
 
 	r =>  [ \&_recompile,         NO_ARGS, GOOD_EXIT, 'Recompiling'                  ],
 	u =>  [ \&_upgrade,           NO_ARGS, GOOD_EXIT, 'Running `make test`'          ],
@@ -363,7 +373,7 @@ sub _process_setup_options
 			);
 		}
 
-	foreach my $o ( qw(F I w T) )
+	foreach my $o ( qw(F I w T P M) )
 		{
 		next unless exists $options->{$o};
 		$Method_table{$o}[ $Method_table_index{code} ]->( $options->{$o} );
@@ -429,7 +439,7 @@ sub run
 
 		my( $sub, $takes_args, $description ) =
 			map { $Method_table{$option}[ $Method_table_index{$_} ] }
-			qw( code takes_args );
+			qw( code takes_args description );
 
 		unless( ref $sub eq ref sub {} )
 			{
@@ -463,6 +473,7 @@ sub _init_logger
 
     unless( $log4perl_loaded )
         {
+        print "Loading internal null logger. Install Log::Log4perl for logging messages\n";
         $logger = Local::Null::Logger->new;
         return $logger;
         }
@@ -811,7 +822,6 @@ sub _is_pingable_scheme {
 sub _find_good_mirrors {
 	require CPAN::Mirrors;
 
-	my $mirrors = CPAN::Mirrors->new;
 	my $file = do {
 		my $file = 'MIRRORED.BY';
 		my $local_path = File::Spec->catfile(
@@ -824,11 +834,10 @@ sub _find_good_mirrors {
 			$local_path;
 			}
 		};
-
-	$mirrors->parse_mirrored_by( $file );
+	my $mirrors = CPAN::Mirrors->new( $file );
 
 	my @mirrors = $mirrors->best_mirrors(
-		how_many   => 3,
+		how_many   => 5,
 		verbose    => 1,
 		);
 
@@ -837,6 +846,9 @@ sub _find_good_mirrors {
 		_print_ping_report( $mirror->http );
 		}
 
+	$CPAN::Config->{urllist} = [
+		map { $_->http } @mirrors
+		];
 	}
 
 sub _print_inc_dir_report
@@ -900,6 +912,19 @@ sub _load_local_lib # -I
 	local::lib->import;
 
 	return HEY_IT_WORKED;
+	}
+
+sub _use_these_mirrors # -M
+	{
+	$logger->debug( "Setting per session mirrors" );
+	unless( $_[0] ) {
+		$logger->die( "The -M switch requires a comma-separated list of mirrors" );
+		}
+
+	$CPAN::Config->{urllist} = [ split /,/, $_[0] ];
+
+	$logger->debug( "Mirrors are @{$CPAN::Config->{urllist}}" );
+
 	}
 
 sub _create_autobundle
@@ -1299,7 +1324,7 @@ sub _eval_version
 sub _path_to_module
 	{
 	my( $inc, $path ) = @_;
-	return if length $path< length $inc;
+	return if length $path < length $inc;
 
 	my $module_path = substr( $path, length $inc );
 	$module_path =~ s/\.pm\z//;
@@ -1341,13 +1366,9 @@ correctly if Log4perl is not installed.
 * When I capture CPAN.pm output, I need to check for errors and
 report them to the user.
 
-* Support local::lib
-
 * Warnings switch
 
 * Check then exit
-
-* ping mirrors support
 
 * no test option
 

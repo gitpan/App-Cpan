@@ -23,4 +23,4 @@ no_index:
 requires:
   CPAN: 1.9301
   Test::More: 0.95
-version: 1.61
+version: 1.61_02
